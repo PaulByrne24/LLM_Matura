@@ -21,12 +21,12 @@ encode = lambda x: [string_to_int_func()[c] for c in x] # Creates a list, uses t
                                                         # Iterates over that using the for loop until the whole string is complete
                                                         # x is the input, c is the individual characters in the input
 
-decode = lambda y: ''.join(int_to_string_func()[l] for l in y)
+decode = lambda y: ''.join(int_to_string_func()[l] for l in y) # doesn't work atm
 
 encoded = encode("Hello")
 
-print(string_to_int_func())
+print(string_to_int_func()) # successful
 
 print(encoded)
 
-print(decode(encoded))
+print(decode(encoded)) # doesn't work atm
