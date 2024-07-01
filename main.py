@@ -15,10 +15,5 @@ decode = lambda y: ''.join(int_to_string[l] for l in y) # successful
 
 
 data = torch.tensor(encode(text), dtype=torch.long)
-#encoded = encode("Hello")
-#
-#print(string_to_int) # successful
-#
-#print(encoded)
-#
-#print(decode(encoded)) # successful
+
+print(data[:100])
