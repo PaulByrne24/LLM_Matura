@@ -48,7 +48,7 @@ class SelfAttention(nn.Module):
         # A linear layer that combines the outputs from all attention heads back into the embedding size
         self.fc_out = nn.Linear(heads*self.head_dim, embed_size)
 
-    def forward_pass(self, value, key, query, mask):
+    def forward(self, value, key, query, mask):
         N = query.shape[0] # the number of rows of query
         value_len, key_len, query_len = value.shape[1], key.shape[1], query.shape[1] # each one is the number of columns of value, key and query
 
