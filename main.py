@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
+import numpy
 
-class EncoderDecoder:
+class textEncoderDecoder:
     def __init__(self, file_path):
         self.file_path = file_path
         self.text = self.read_file()
@@ -27,6 +28,47 @@ class EncoderDecoder:
     def get_encoded_data(self):
         return self.data[:100]
 
-file_path = "wizard_of_oz.txt"
-encoder_decoder = EncoderDecoder(file_path) # saves the class into a variable with "file_path" as it's attribute
+encoder_decoder = textEncoderDecoder("wizard_of_oz.txt") # saves the class into a variable with the wizard of oz text
 print(encoder_decoder.get_encoded_data())
+
+class SelfAttention(nn.Module):
+    def __init__(self, embed_size, heads):
+        super(SelfAttention, self).__init__()
+        self.embed_size = embed_size # the size of the embedding (of the words)
+        self.heads = heads # the amount of attention heads
+        self.head_dim = embed_size // heads # sets the dimension of each attention head
+
+        assert(self.head_dim * heads == embed_size), "the embed size needs to be divisible by the amount of heads" # To create a 2d input array, checks if the amount of attention heads and the size of the embeds are divisible
+
+        # creates the variables values, key and queries as linear layers with the value of head_dim as it's input dim and exit dim. 
+        self.values = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.keys = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        self.queries = nn.Linear(self.head_dim, self.head_dim, bias=False)
+        
+        # A linear layer that combines the outputs from all attention heads back into the embedding size
+        self.fc_out = nn.Linear(heads*self.head_dim, embed_size)
+
+    def forward_pass(self, value, key, query, mask):
+        N = query.shape[0] # the number of rows of query
+        value_len, key_len, query_len = value.shape[1], key.shape[1], query.shape[1] # each one is the number of columns of value, key and query
+
+        # Splits the embedding into self.heads pieces (each value in the embedding will be passed through the amount of attention heads)
+        values = value.reshape(N, value_len, self.heads, self.head_dim)
+        keys = key.reshape(N, key_len, self.heads, self.head_dim)
+        queries = query.reshape(N, key_len, self.heads, self.head_dim)
+
+        # Calculate the dot product between queries and keys for each head, this then gives the attention energy score
+        energy_score = torch.einsum("nqhd,nkhd->nhqk", [queries, keys])
+
+        # Applies a mask to the energy scores, setting masked positions to a very low value to ignore them in the softmax
+        if mask != None:
+            energy_score = energy_score.masked_fill(mask == 0, float("-1e22"))
+
+        attention = torch.softmax(energy_score / (self.embed_size**(1/2)), dim=3) # uses the softmax function and divides the energy score with the square root of the embed size and applies it on the 3rd dim
+
+        # calculates the dot product of the attention and the values variables, then reshapes the result to combine the resulting heads
+        output = torch.einsum("nhql,nlhd->nqhd",[attention, values]).reshape(N, query_len, self.heads*self.head_dim)
+
+        # applies the fc_out linear neural network and uses the arrays of "output" as it's input. Then returns the output of the NN.
+        output = self.fc_out(output)
+        return output
