@@ -100,8 +100,9 @@ class TransEncoderBlock(nn.Module):
         return output
     
 class Encoder(nn.Module):
-    def __init__(self, embed_size, heads, dropout, forward_expansion, vocab_size, length, device, num_layers):
+    def __init__(self, embed_size, heads, dropout, forward_expansion, vocab_size, length, device):
         super(Encoder, self).__init__()
+        self.device = device
         self.embed_size = embed_size
         self.word_embedding = nn.Embedding(vocab_size, embed_size) # embedds the words with a vector in 3d space
         self.posit_embedding = nn.Embedding(length, embed_size) # saves the positions of the words in the original sentence
@@ -121,7 +122,7 @@ class Encoder(nn.Module):
         return output
     
 class TransDecoderBlock(nn.Module):
-    def __init__(self, embed_size, heads, forward_expansion, dropout, device):
+    def __init__(self, embed_size, heads, forward_expansion, dropout):
         super(TransDecoderBlock, self).__init__()
         self.attention = SelfAttention(embed_size, heads)
         self.norm1 = nn.LayerNorm(embed_size)
@@ -129,12 +130,42 @@ class TransDecoderBlock(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, value, key, orgnl_mask, trgt_mask):
-        attention = self.attention(x, x, x, trgt_mask)
+    def forward(self, x, value, key, src_mask, tgt_mask):
+        attention = self.attention(x, x, x, tgt_mask)
         query = self.dropout(self.norm1(attention + x))
-        output = self.encoder_block(value, key, query, orgnl_mask)
+        output = self.encoder_block(value, key, query, src_mask)
         return output
     
 class Decoder(nn.Module):
-    def __init__(self, embed_size, num_layers, heads, forward_expansion, dropout, length):
-        pass
+    def __init__(self, embed_size, num_layers, heads, forward_expansion, dropout, length, vocab_size, device):
+        super(Decoder, self).__init__()
+        self.device = device
+        self.word_embed = nn.Embedding(vocab_size, embed_size)
+        self.pos_embed = nn.Embedding(length, embed_size)
+
+        self.layers = nn.ModuleList(
+            [TransDecoderBlock(embed_size, heads, forward_expansion, dropout, device)
+             for i in range(num_layers)]
+            )
+        
+        self.fc_out = nn.Linear(embed_size, vocab_size)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x, encoder_out, src_mask, tgt_mask):
+        N, seq_length = x.shape
+        positions = torch.arrange(0, seq_length).expand(N, seq_length).to(self.device)
+        x = self.dropout(self.word_embed(x) + self.pos_embed(positions))
+
+        for layer in self.layers:
+            x = layer(x, encoder_out, encoder_out, src_mask, tgt_mask)
+
+        output = self.fc_out(x)
+        return output
+
+
+class Transformer(nn.Module):
+    def __init__(self, embed_size=256, num_layers=6, forward_expansion=4, heads=8, dropout=0, device="cuda", length=100, src_vocab_size, tgt_vocab_size):
+        super(Transformer,self).__init__()
+
+        self.encoder = Encoder(src_vocab_size, embed_size, num_layers, heads, device, forward_expansion, dropout, length)
+        self.decoder = Decoder(tgt_vocab_size, embed_size, num_layers, heads, forward_expansion, dropout, device, length)
